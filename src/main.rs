@@ -103,12 +103,12 @@ impl ParseReport {
         ParseReport { total, pattern_count : counter, visible, invisible }
     }
 
-    pub fn to_pickle_obj(&self) -> (HashMap<String, (i64, f64)>, [i32; 11], [i32; 11]) {
-        let mut strmap: HashMap<String, (i64, f64)> = HashMap::new();
-        for (k, v) in self.pattern_count.iter() {
-            strmap.insert(format!("{}", k), *v);
+    pub fn to_pickle_obj(&self) -> HashMap<String, (f64, i64)> {
+        let mut strmap: HashMap<String, (f64, i64)> = HashMap::new();
+        for (k, (c, p)) in self.pattern_count.iter() {
+            strmap.insert(format!("{}", k), (*p, *c));
         }
-        (strmap, self.visible, self.invisible)
+        strmap
     }
 }
 
@@ -136,31 +136,32 @@ fn parse_one(path : PathBuf) {
     let mut bm_split = bm_folder.split('.');
     let bm_name = bm_split.next().unwrap();
     let bm_iter_n = bm_split.last().unwrap();
-    println!("{}-{}: folder_name: {}", bm_name, bm_iter_n, bm_folder);
-    // return;
+    let task_name = format!("{}-{}", bm_name, bm_iter_n);
+    println!("{}: folder_name: {}", task_name, bm_folder);
 
     let binpb_file = File::open(path.as_os_str()).unwrap();
     let binpb_bufreader = BufReader::new(binpb_file);
 
-    println!("{}-{}: Reading zstd file", bm_name, bm_iter_n);
+    println!("{}: Reading zstd file", task_name);
     let mut pb_bytes: Vec<u8> = Vec::new();
     let mut zstd_file = zstd::Decoder::new(binpb_bufreader).unwrap();
     let result = zstd_file.read_to_end( &mut pb_bytes).unwrap();
-    println!("{}-{}: Read {} MB from zstd file", bm_name, bm_iter_n, result / 1024 / 1024);
+    println!("{}: Read {} KB from zstd file", task_name, result / 1024);
 
-    println!("{}-{}: Parsing protobuf", bm_name, bm_iter_n);
+    println!("{}: Parsing protobuf", task_name);
     let pb_iter = ShapesIteration::decode(&*pb_bytes).unwrap();
 
-    println!("{}-{}: Doing satistic", bm_name, bm_iter_n);
+    println!("{}: Doing satistic", task_name);
     let report = ParseReport::new(pb_iter);
 
-    println!("{}-{}: Serialising report", bm_name, bm_iter_n);
-    let report_buf = serde_pickle::to_vec(&report.to_pickle_obj(), serde_pickle::SerOptions::new()).unwrap();
+    println!("{}: Serialising report", task_name);
+    let report_tuple = (task_name.clone(), report.to_pickle_obj(), report.visible, report.invisible);
+    let report_buf = serde_pickle::to_vec(&report_tuple, serde_pickle::SerOptions::new()).unwrap();
 
-    println!("{}-{}: Writing report", bm_name, bm_iter_n);
+    println!("{}: Writing report", task_name);
     io::stdout().flush().unwrap();
-    let mut report_file = File::create(format!("{}-{}.pkl", bm_name, bm_iter_n)).unwrap();
+    let mut report_file = File::create(format!("{}.pkl", task_name)).unwrap();
     report_file.write_all(&report_buf).unwrap();
 
-    println!("{}-{}: Done", bm_name, bm_iter_n);
+    println!("{}: Done", task_name);
 }
