@@ -81,8 +81,9 @@ impl ParseReport {
                                    .and_modify(|(count, _)| *count += 1)
                                    .or_insert((1, 0.0));
                             for i in 0..visible.len() {
-                                let val = 1 << (6 + i);
-                                if (shape.object / val) == ( (shape.object + (*shape.offsets.last().unwrap()) as u64 / val ) ){ 
+                                let val: u64 = 1 << (6 + i);
+                                // println!("obj:{}, val: {}, offset:{}, obj/val:{}, obj+off/val:{}", shape.object, val, *shape.offsets.last().unwrap(), shape.object / val, (shape.object + u64::try_from(*shape.offsets.last().unwrap()).unwrap() / val ));
+                                if (shape.object / val) == ( (shape.object + u64::try_from(*shape.offsets.last().unwrap()).unwrap()) / val  ) { 
                                     visible[i] += 1;
                                 } else {
                                     invisible[i] += 1;
@@ -125,6 +126,7 @@ fn main() {
         }
     }
 
+    // parse_one((*(entries.get(0).unwrap())).clone());
     let _iter = entries.into_par_iter().for_each(|path| parse_one(path) );
 
     println!("\nAll done!\n\n");
