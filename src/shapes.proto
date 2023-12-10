@@ -11,12 +11,22 @@ message ShapesEpoch {
 }
 
 message Shape {
+    enum Category {
+        Other = 0;
+        SimpleVec = 1;
+        Array = 2;
+        Module = 3;
+        DataType = 4;
+    }
     enum Kind {
         ValArray = 0;
         ObjArray = 1;
         Scalar = 2;
     }
-    Kind kind = 1;
-    uint64 object = 2;
-    repeated sint64 offsets = 3;
+    
+    Category category = 1;
+    Kind kind = 2;
+    uint64 object = 3;
+    uint64 begin = 4;
+    repeated sint64 offsets = 5;
 }

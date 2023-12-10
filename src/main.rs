@@ -1,11 +1,11 @@
 use std::{env, path::PathBuf};
-use glob::glob;
+// use glob::glob;
 use prost::Message;
-use proto_shapes::shape::Kind;
+use proto_shapes::shape::*;
 use serde::{Serialize, Deserialize};
 use core::fmt;
 use std::{fs::File, io::{BufReader, Read, self, Write}, collections::HashMap};
-use rayon::prelude::*;
+// use rayon::prelude::*;
 
 mod proto_shapes;
 use crate::proto_shapes::*;
@@ -13,9 +13,11 @@ use crate::proto_shapes::*;
 impl Shape {
     pub fn to_string(&self) -> String {
         let str_offsets : String = self.offsets.iter().map( |&offset| offset.to_string() + "," ).collect();
-        format!("Myshape {{ kind: {}, object: {}, offsets: {} }}", 
-                &self.kind, 
-                &self.object, 
+        format!("Myshape {{ category: {},\tkind: {},\tobject: {},\tbegin: {},\toffsets: {} }}", 
+                &self.category().as_str_name(),
+                &self.kind().as_str_name(), 
+                &self.begin,
+                &self.object,
                 &str_offsets
         )
     }
@@ -41,6 +43,7 @@ impl fmt::Display for PatternKind {
 pub struct ParseReport {
     pub total: i32,
     pub pattern_count: HashMap<PatternKind, (i64, f64)>,
+    pub category_count: HashMap<Category, i32>,
     pub visible: [i32; 11],
     pub invisible: [i32; 11],
 }
@@ -51,9 +54,17 @@ impl ParseReport {
         let mut total = 0;
         let mut visible = [0; 11];
         let mut invisible = [0; 11];
+        let mut category_counter = HashMap::new();
+
         for epoch in shape_iter.epochs.iter() {
             for shape in epoch.shapes.iter() {
                 // println!("{}", shape.to_string());
+
+                match category_counter.get(&shape.category()) {
+                    Some(count) => category_counter.insert(shape.category(), count+1),
+                    None => category_counter.insert(shape.category(), 1),
+                };
+
                 match shape.kind() {
                     Kind::ValArray => {
                         counter.entry(PatternKind::NoRef)
@@ -69,7 +80,7 @@ impl ParseReport {
                         // visible.map(|&mut count| *count += 1);
                         for v in visible.iter_mut() { *v += 1};
                     },
-                    Kind::NoRef => {
+                    Kind::Scalar => {
                         if shape.offsets.len() == 0 {
                             counter.entry(PatternKind::NoRef)
                                    .and_modify(|(count, _)| *count += 1)
@@ -92,18 +103,20 @@ impl ParseReport {
                             }
                         }
                     },
-                    _ => { unreachable!(); },
                 }
                 total += 1;
             }
         }
         
+        // print_category_stats(category_counter);
+        println!("{:?}", category_counter);
+
         // normalize
         for (_pattern, (count, percent)) in counter.iter_mut() {
             *percent = *count as f64 / total as f64;
         }
 
-        ParseReport { total, pattern_count : counter, visible, invisible }
+        ParseReport { total, pattern_count : counter, category_count : category_counter, visible, invisible }
     }
 
     pub fn to_pickle_obj(&self) -> HashMap<String, (f64, i64)> {
@@ -113,11 +126,18 @@ impl ParseReport {
         }
         strmap
     }
+
 }
 
 fn main() {
     let args: Vec<String> = env::args().collect();
     println!("{:?}", args);
+    if args.len() != 2 {
+        eprintln!("Usage: {} <file_path>", args[0]);
+        std::process::exit(1);
+    }
+
+    let path = PathBuf::from(args[1].to_owned());
     // let path_match = args[1].to_owned() + "*/shapes2.binpb.zst";
 
     // let mut entries: Vec<PathBuf> = vec![];
@@ -127,13 +147,15 @@ fn main() {
     //         Err(e) => println!("{:?}", e),
     //     }
     // }
-
-    let path = PathBuf::from(args[1].to_owned());
-    parse_one(path);
     // parse_one((*(entries.get(0).unwrap())).clone());
     // let _iter = entries.into_par_iter().for_each(|path| parse_one(path) );
 
-    println!("\nAll done!\n\n");
+    if path.ends_with("shapes.binpb.zst") && path.exists() {
+        parse_one(path);
+        println!("\nDone!\n\n");
+    } else {
+        eprintln!("Bad file path or name: {}", args[0]);
+    }
 }
 
 fn parse_one(path : PathBuf) {
@@ -170,5 +192,5 @@ fn parse_one(path : PathBuf) {
     let mut report_file = File::create(format!("{}.pkl", task_name)).unwrap();
     report_file.write_all(&report_buf).unwrap();
 
-    // println!("{}: Done", task_name);
+    println!("{}: Done", task_name);
 }
