@@ -1,5 +1,5 @@
 use std::{env, path::PathBuf};
-// use glob::glob;
+use glob::glob;
 use prost::Message;
 use proto_shapes::shape::*;
 use serde::{Serialize, Deserialize};
@@ -13,10 +13,8 @@ use crate::proto_shapes::*;
 impl Shape {
     pub fn to_string(&self) -> String {
         let str_offsets : String = self.offsets.iter().map( |&offset| offset.to_string() + "," ).collect();
-        format!("Myshape {{ category: {},\tkind: {},\tobject: {},\tbegin: {},\toffsets: {} }}", 
+        format!("Myshape {{ category: {},\tobject: {},\toffsets: {} }}", 
                 &self.category().as_str_name(),
-                &self.kind().as_str_name(), 
-                &self.begin,
                 &self.object,
                 &str_offsets
         )
@@ -65,32 +63,18 @@ impl ParseReport {
                     None => category_counter.insert(shape.category(), 1),
                 };
 
-                match shape.kind() {
-                    Kind::ValArray => {
-                        counter.entry(PatternKind::NoRef)
-                               .and_modify(|(count, _)| *count += 1)
-                               .or_insert((1, 0.0));
-                        // visible. .map(|&mut count| *count += 1);
-                        for v in visible.iter_mut() { *v += 1};
-                    },
-                    Kind::ObjArray => {
-                        counter.entry(PatternKind::ObjArray)
-                               .and_modify(|(count, _)| *count += 1)
-                               .or_insert((1, 0.0));
-                        // visible.map(|&mut count| *count += 1);
-                        for v in visible.iter_mut() { *v += 1};
-                    },
-                    Kind::Scalar => {
+                match shape.category() {
+                    Category::DataType => {
                         if shape.offsets.len() == 0 {
                             counter.entry(PatternKind::NoRef)
-                                   .and_modify(|(count, _)| *count += 1)
-                                   .or_insert((1, 0.0));
+                                    .and_modify(|(count, _)| *count += 1)
+                                    .or_insert((1, 0.0));
                             // visible.map(|&mut count| *count += 1);
                             for v in visible.iter_mut() { *v += 1};
                         } else {
                             counter.entry(PatternKind::ShapePattern(shape.offsets.clone()))
-                                   .and_modify(|(count, _)| *count += 1)
-                                   .or_insert((1, 0.0));
+                                    .and_modify(|(count, _)| *count += 1)
+                                    .or_insert((1, 0.0));
                             for i in 0..visible.len() {
                                 let val: u64 = 1 << (6 + i);
                                 // println!("", shape.object, shape.off)
@@ -103,6 +87,7 @@ impl ParseReport {
                             }
                         }
                     },
+                    _ => {}
                 }
                 total += 1;
             }
@@ -137,37 +122,31 @@ fn main() {
         std::process::exit(1);
     }
 
-    let path = PathBuf::from(args[1].to_owned());
-    // let path_match = args[1].to_owned() + "*/shapes2.binpb.zst";
+    // let path = PathBuf::from(args[1].to_owned());
+    let path_match = args[1].to_owned() + "*.binpb.zst";
 
-    // let mut entries: Vec<PathBuf> = vec![];
-    // for entry in glob(path_match.as_str()).expect("Failed to read glob pattern") {
-    //     match entry {
-    //         Ok(path) => entries.push(path),
-    //         Err(e) => println!("{:?}", e),
-    //     }
-    // }
-    // parse_one((*(entries.get(0).unwrap())).clone());
-    // let _iter = entries.into_par_iter().for_each(|path| parse_one(path) );
-
-    if path.ends_with("shapes.binpb.zst") && path.exists() {
-        parse_one(path);
-        println!("\nDone!\n\n");
-    } else {
-        eprintln!("Bad file path or name: {}", args[0]);
+    let mut entries: Vec<PathBuf> = vec![];
+    for entry in glob(path_match.as_str()).expect("Failed to read glob pattern") {
+        match entry {
+            // Ok(path) => entries.push(path),
+            Ok(path) => parse_one(path),
+            Err(e) => println!("{:?}", e),
+        }
     }
 }
 
 fn parse_one(path : PathBuf) {
-    println!("{:?}", path.display());
-    // let bm_folder = path.parent().unwrap().to_str().unwrap().split('/').last().unwrap();
+    // println!("{:?}", path.display());
+    let bm_folder = path.parent().unwrap().to_str().unwrap().split('/').last().unwrap();
     // let mut bm_split = bm_folder.split('.');
-    // let bm_name = bm_split.next().unwrap();
+    let bm_name = path.file_name().unwrap().to_str().unwrap().split_once('.').unwrap().0;
     // let bm_iter_n = bm_split.last().unwrap();
     // let task_name = format!("{}-{}", bm_name, bm_iter_n);
-    let task_name = "shape";
-    // println!("{}: folder_name: {}", task_name, bm_folder);
-
+    // let task_name = "shape";
+    let task_name = bm_name;
+    // println!("bench: {};  folder_name: {}", bm_name, bm_folder);
+    // return;
+    
     let binpb_file = File::open(path.as_os_str()).unwrap();
     let binpb_bufreader = BufReader::new(binpb_file);
 

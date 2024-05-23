@@ -17,16 +17,12 @@ message Shape {
         Array = 2;
         Module = 3;
         DataType = 4;
+        Task = 5;
+        Buffer = 6;
+        Symbol = 7;
+        String = 8;
     }
-    enum Kind {
-        ValArray = 0;
-        ObjArray = 1;
-        Scalar = 2;
-    }
-    
     Category category = 1;
-    Kind kind = 2;
     uint64 object = 3;
-    uint64 begin = 4;
     repeated sint64 offsets = 5;
 }
